@@ -1,0 +1,233 @@
+\documentclass{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{minted}
+
+\setbeamertemplate{navigation symbols}{}
+
+\begin{document}
+
+\newminted{haskell}{fontsize=\footnotesize}
+
+\title{Основы Template Haskell}
+\date{Октябрь 2012 г.}
+\maketitle
+
+\begin{frame}{Описание}
+\begin{itemize}
+    \item Compile-time meta-programming
+    \item Разработан SPJ и Tim Sheard в 2002-ом году (MSR)
+    \item Реализован в GHC с версии 6 (и только в нём)
+    \item Ближайшие аналоги
+    \begin{itemize}
+        \item LISP (runtime)
+        \item Python compiler/ast модули (runtime)
+    \end{itemize}
+    \item Похожие инструменты
+    \begin{itemize}
+        \item Препроцессоры (cpp, perl source filters, etc.)
+        \item eval
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Преимущества}
+\begin{itemize}
+    \item Позволяет делать вещи, которые
+    не реализовать другими средствами (DSL)
+    \item Помогает избавиться от boilerplate-кода (auto derives)
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Синтаксис}
+\begin{itemize}
+    \item Прагма -XTemplateHaskell
+    \item Language.Haskell.TH, Language.Haskell.TH.Syntax
+    \item Q Monad
+    \item Name
+    \begin{haskellcode}
+    Prelude Language.Haskell.TH> :t 'True
+    'True :: Name
+    Prelude Language.Haskell.TH> 'True
+    GHC.Types.True
+    Prelude Language.Haskell.TH> ''Maybe
+    Data.Maybe.Maybe
+    \end{haskellcode}
+    \item \$splice
+    \begin{haskellcode}
+    $(deriveShow ''Test) :: Q [Dec]
+    $(tuple 10 "test") :: Q Exp
+    $(generateType 'Int 'Bool) :: Q Type
+    \end{haskellcode}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Quotation}
+\begin{itemize}
+    \item {[}| … |{]}, {[}e| … |{]} :: Q Exp
+    \begin{haskellcode}
+    [e| 1 + 2 + 3 |]
+
+    Prelude Language.Haskell.TH> runQ [| 1 + 2 + 3|]
+    InfixE (Just (InfixE (Just (LitE (IntegerL 1)))
+    (VarE GHC.Num.+) (Just (LitE (IntegerL 2)))))
+    (VarE GHC.Num.+) (Just (LitE (IntegerL 3)))
+    \end{haskellcode}
+    \item {[}d| … |{]} :: Q {[}Dec{]}
+    \begin{haskellcode}
+    [d| const a b = a |]
+    \end{haskellcode}
+    \item {[}t| … |{]} :: Q Type
+    \begin{haskellcode}
+    [t| Int -> String -> Bool |]
+    \end{haskellcode}
+    \item {[}p| … |{]} :: Q Pat
+    \begin{haskellcode}
+    [p| (_, []) |]
+    \end{haskellcode}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Quasi-quotation }
+\begin{itemize}
+    \item GHC 6.10+
+    \item Прагма -XQuasiQuotes
+    \item
+    \begin{haskellcode}
+    [quoter| string |]
+    \end{haskellcode}
+    \item
+    \begin{haskellcode}
+    data QuasiQuoter = QuasiQuoter
+        { quoteExp  :: String -> Q Exp
+        , quotePat  :: String -> Q Pat
+        , quoteType :: String -> Q Type
+        , quoteDec  :: String -> Q [Dec]
+        }
+    \end{haskellcode}
+    \item
+    \begin{haskellcode}
+    [persist|
+        Person
+            name String
+            age Int
+            deriving Show
+        Car
+            color String
+            make String
+            model String
+            deriving Show
+    |]
+    \end{haskellcode}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Пример 1}
+\inputminted[fontsize=\tiny]{haskell}{examples/Main1.hs}
+\begin{haskellcode*}{fontsize=\tiny}
+---------------------------------------
+% runghc -ddump-splices Main1.hs
+
+InfixE (Just (LitE (IntegerL 7))) (VarE GHC.Num.*) (Just (LitE (IntegerL 3)))
+
+Main.hs:5:7-25: Splicing expression
+    compile [| 7 * 3 |] ======> 21
+
+InfixE (Just (InfixE (Just (LitE (IntegerL 7))) (VarE GHC.Num.*) (Just (LitE (IntegerL 9)))))
+(VarE GHC.Num.+) (Just (LitE (IntegerL 3)))
+
+Main.hs:6:7-29: Splicing expression
+    compile [| 7 * 9 + 3 |] ======> 66
+
+InfixE (Just (InfixE (Just (LitE (IntegerL 5))) (VarE GHC.Num.*) (Just (LitE (IntegerL 8)))))
+(VarE GHC.Num.+)
+(Just (InfixE (Just (LitE (IntegerL 6))) (VarE GHC.Num.*) (Just (LitE (IntegerL 3)))))
+
+Main.hs:7:7-33: Splicing expression
+    compile [| 5 * 8 + 6 * 3 |] ======> 58
+\end{haskellcode*}
+\end{frame}
+
+\begin{frame}[fragile]{Пример 1 (код)}
+\inputminted[fontsize=\tiny]{haskell}{examples/TH1.hs}
+\end{frame}
+
+\begin{frame}[fragile]{Пример 2}
+\inputminted[fontsize=\tiny]{haskell}{examples/Main2.hs}
+\begin{haskellcode*}{fontsize=\tiny}
+---------------------------------------
+% runghc -ddump-splices Main2.hs
+Main2.hs:1:1: Splicing declarations
+    deriveShow ''Test
+  ======>
+    Main2.hs:10:3-19
+    instance Show Test where
+      show rec_a1jH
+        = ("Main.Test:\
+           \\t"
+           ++
+             (Data.List.intercalate
+                "\
+                \\t"
+                [("Main.fieldA: " ++ (show (fieldA rec))),
+                 ("Main.fieldB: " ++ (show (fieldB rec)))]))
+Main.Test:
+    Main.fieldA: 1
+    Main.fieldB: False
+\end{haskellcode*}
+\end{frame}
+
+\begin{frame}[fragile]{Пример 2 (код)}
+\inputminted[fontsize=\tiny]{haskell}{examples/TH2.hs}
+\end{frame}
+
+\begin{frame}{Примеры проектов}
+\begin{itemize}
+    \item Yesod (models, templates, routes, etc.)
+    \item Happstack (models)
+    \item TwilightSparkle (models, auto derives)
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Недостатки}
+\begin{itemize}
+    \item Не type-safe, не haskell-way
+    \begin{itemize}
+        \item Что находится внутри Q {[Dec]}, Q Exp ?
+        \item Можно генерировать нерабочий код и выяснить это только
+        при непосредственном использовании
+        \item Очень сложно писать unit-тесты
+        (в том числе из-за ограничений reify)
+        \item Имеет доступ к приватным определениям модулей
+        \item Лишь незначительно лучше препроцессора
+        (не нужно разбирать AST)
+        \item QQ работает с обычной строкой, для которой надо писать
+        свой парсер, что делает его поведении совершенно некотролируемым
+    \end{itemize}
+    \item Сложно читать код
+    \item Страшно выглядит
+    \item Может выполнять при {\it компиляции} произвольный код
+    \item TH-функции нельзя использовать в том же модуле,
+    где они определены
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Ссылки}
+\begin{itemize}
+    \item \url{http://www.haskell.org/haskellwiki/Template_Haskell}
+    \item \url{http://www.haskell.org/ghc/docs/latest/html/users_guide/template-haskell.html}
+    \item \url{http://www.haskell.org/haskellwiki/Quasiquotation}
+    \item \url{http://hackage.haskell.org/packages/archive/template-haskell/latest/doc/html/Language-Haskell-TH.html}
+    \item \url{http://www.yesodweb.com/book/persistent}
+    \item \url{http://www.yesodweb.com/blog/2012/10/yesod-pure}
+    \item \url{http://stackoverflow.com/questions/10857030/whats-so-bad-about-template-haskell}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+  \begin{center}
+    \Large Вопросы?
+  \end{center}
+\end{frame}
+
+\end{document}
